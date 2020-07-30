@@ -15,28 +15,37 @@
     var PLAYBACK_RATE_SCALE = 100;
     var FFT_SIZE = 1024;
 
+    var SCALE = {
+        "gain": GAIN_SCALE,
+        "Q": Q_SCALE,
+        "delayTime": DELAY_TIME_SCALE,
+        "attack": ATTACK_SCALE,
+        "release": RELEASE_SCALE,
+        "playbackRate": PLAYBACK_RATE_SCALE
+    }
     var stage, stockArea, compositeArea, activeConnection;
     var audioContext, micStream, mediaNode;
     var freqBuffer = new Uint8Array(FFT_SIZE / 2);
     var selectedPatch = null;
 
     var nodeSpec = {
-        MediaElementAudioSource : {
+        /*MediaElementAudioSource : {
             label : 'media',
             pos : 0,
             maxInstance : 1,
             build : function() { return mediaNode; }
-        },
+        },*/
         MediaStreamAudioSource : {
             label : 'microphone',
-            pos : 1,
+            pos : 0,
             maxInstance : Number.MAX_VALUE,
             build : function() { return audioContext.createMediaStreamSource(micStream); }
         },
         Oscillator : {
             label : 'oscillator',
-            pos : 2,
+            pos : 1,
             maxInstance : Number.MAX_VALUE,
+            aparams : ["frequency", "detune"],
             build : function() {
                 var node = audioContext.createOscillator();
                 node.start(0);
@@ -45,8 +54,9 @@
         },
         AudioBufferSource : {
             label : 'buffer',
-            pos : null,
+            pos : 2,
             maxInstance : Number.MAX_VALUE,
+            aparams : ["playbackRate"],
             build : function() {
                 var node = audioContext.createBufferSource();
                 node.loop = true;
@@ -57,6 +67,7 @@
             label : 'gain',
             pos : 3,
             maxInstance : Number.MAX_VALUE,
+            aparams : ["gain"],
             build : function() { return audioContext.createGain(); }
         },
         ChannelSplitter : {
@@ -75,6 +86,7 @@
             label : 'biquad',
             pos : 6,
             maxInstance : Number.MAX_VALUE,
+            aparams : ["frequency", "detune", "Q", "gain"],
             build : function() { return audioContext.createBiquadFilter(); }
         },
         Convolver : {
@@ -91,12 +103,14 @@
             label : 'delay',
             pos : 8,
             maxInstance : Number.MAX_VALUE,
+            aparams : ["delayTime"],
             build : function() { return audioContext.createDelay(5); }
         },
         DynamicsCompressor : {
             label : 'compress',
             pos : 9,
             maxInstance : Number.MAX_VALUE,
+            aparams: ["threshold", "knee", "ratio", "reduction", "attack", "release"],
             build : function() { return audioContext.createDynamicsCompressor(); }
         },
         WaveShaper : {
@@ -197,10 +211,10 @@
         
         window.AudioContext = window.AudioContext || window.webkitAudioContext;
         audioContext = new AudioContext();
-
-        document.getElementById('music').play();
+        
+        /*document.getElementById('music').play();
         mediaNode = audioContext.createMediaElementSource(document.getElementById('music'));
-
+        */
         workspace = document.getElementById('workspace');
 
         stage = new Stage('mainStage');
@@ -244,56 +258,12 @@
     }
 
     function setupComposition() {
-        var media, convolv, shaper, compress, analyser1, analyser2, analyser3, dest;
-
-        media = Patch('MediaElementAudioSource', 'composite');
-        media.x = compositeArea.getBounds().width / 2 - 3 * media.getBounds().width;
-        media.y = compositeArea.getBounds().height / 2;
-        compositeArea.patches.addChild(media);
+        var dest;
 
         dest = Patch('AudioDestination', 'composite');
         dest.x = compositeArea.getBounds().width / 2 + 3 * dest.getBounds().width;
         dest.y = compositeArea.getBounds().height / 2;
         compositeArea.patches.addChild(dest);
-
-        convolve = Patch('Convolver', 'composite');
-        convolve.x = compositeArea.getBounds().width / 2 - convolve.getBounds().width;
-        convolve.y = compositeArea.getBounds().height / 2 - 2 * convolve.getBounds().height;
-        compositeArea.patches.addChild(convolve);
-
-        shaper = Patch('WaveShaper', 'composite');
-        shaper.x = compositeArea.getBounds().width / 2 - shaper.getBounds().width;
-        shaper.y = compositeArea.getBounds().height / 2 + 2 * shaper.getBounds().height;
-        compositeArea.patches.addChild(shaper);
-
-        compress = Patch('DynamicsCompressor', 'composite');
-        compress.x = compositeArea.getBounds().width / 2 - compress.getBounds().width;
-        compress.y = compositeArea.getBounds().height / 2;
-        compress.node.threshold.value = -60;
-        compositeArea.patches.addChild(compress);
-
-        analyser1 = Patch('Analyser', 'composite');
-        analyser1.x = compositeArea.getBounds().width / 2 + 1 * analyser1.getBounds().width;
-        analyser1.y = compositeArea.getBounds().height / 2;
-        compositeArea.patches.addChild(analyser1);
-
-        analyser2 = Patch('Analyser', 'composite');
-        analyser2.x = compositeArea.getBounds().width / 2 + 1 * analyser2.getBounds().width;
-        analyser2.y = compositeArea.getBounds().height / 2 - 2*  analyser2.getBounds().height;
-        compositeArea.patches.addChild(analyser2);
-
-        analyser3 = Patch('Analyser', 'composite');
-        analyser3.x = compositeArea.getBounds().width / 2 + 1 * analyser3.getBounds().width;
-        analyser3.y = compositeArea.getBounds().height / 2 + 2 * analyser3.getBounds().height;
-        compositeArea.patches.addChild(analyser3);
-
-        media.outputPorts.children[0].connect(compress.inputPorts.children[0]);
-        compress.outputPorts.children[0].connect(analyser1.inputPorts.children[0]);
-        analyser1.outputPorts.children[0].connect(dest.inputPorts.children[0]);
-        media.outputPorts.children[0].connect(convolve.inputPorts.children[0]);
-        convolve.outputPorts.children[0].connect(analyser2.inputPorts.children[0]);
-        media.outputPorts.children[0].connect(shaper.inputPorts.children[0]);
-        shaper.outputPorts.children[0].connect(analyser3.inputPorts.children[0]);
     }
 
     function onTick(event) {
@@ -726,7 +696,7 @@
             x = 8 - patch.getBounds().width / 2;
             y = (i + 1) * patch.getBounds().height / (patch.node.numberOfInputs + 1) - patch.getBounds().height / 2;
 
-            port = Port('input', i);
+            port = Port(patch.node, 'input', i);
             port.x = x;
             port.y = y;
             patch.inputPorts.addChild(port);
@@ -743,7 +713,7 @@
             x = patch.getBounds().width / 2 - 8;
             y = (i + 1) * patch.getBounds().height / (patch.node.numberOfOutputs + 1) - patch.getBounds().height / 2;
 
-            port = Port('output', i);
+            port = Port(patch.node, 'output', i);
             port.x = x;
             port.y = y;
             patch.outputPorts.addChild(port);
@@ -780,7 +750,7 @@
         return patch;
     }
 
-    function Port(type, channel) {
+    function Port(node, type, channel) {
         var port;
 
         function onMouseDown(event) {
@@ -840,24 +810,20 @@
             disconnect();
         }
         function connect(peer) {
-            var myPatch, peerPatch;
 
             if (port.peers.indexOf(peer) === -1) {
                 port.peers.push(peer);
                 peer.peers.push(port);
 
-                myPatch = port.parent.parent;
-                peerPatch = peer.parent.parent;
-
                 if (port.portType === 'input') {
-                    peerPatch.node.connect(myPatch.node, peer.channel, port.channel);
+                    peer.node.connect(port.node, peer.channel, port.channel);
                 } else {
-                    myPatch.node.connect(peerPatch.node, port.channel, peer.channel);
+                    port.node.connect(peer.node, port.channel, peer.channel);
                 }
             }
         }
         function disconnect() {
-            var i, j, peer, patch;
+            var i, j, peer;
 
             for (i = 0; i < port.peers.length; i++) {
                 peer = port.peers[i];
@@ -870,26 +836,24 @@
                     peer.reconnect();
                 }
             } else {
-                patch = port.parent.parent;
-                patch.node.disconnect(port.channel);
+                port.node.disconnect(port.channel);
             }
 
             port.peers = [];
         }
         function reconnect() {
-            var patch, peer, peerPatch, i;
+            var peer, peerPatch, i;
 
-            patch = port.parent.parent;
-            patch.node.disconnect(port.channel);
+            port.node.disconnect(port.channel);
             for (i = 0; i < port.peers.length; i++) {
                 peer = port.peers[i];
-                peerPatch = peer.parent.parent;
-                patch.node.connect(peerPatch.node, port.channel, peer.channel);
+                patch.node.connect(peer.node, port.channel, peer.channel);
             }
         }
 
         port = new Shape();
         port.portType = type;
+        port.node = node;
         port.channel = channel;
         port.graphics.beginFill('#888').drawCircle(0, 0, PORT_RADIUS);
         port.setBounds(-PORT_RADIUS, -PORT_RADIUS, 2 * PORT_RADIUS, 2 * PORT_RADIUS);
@@ -969,6 +933,30 @@
     };
 
     function setupViews() {
+        
+        function setupParams(pane, node, nodeType) {
+            if(nodeSpec[nodeType].aparams){
+                nodeSpec[nodeType].aparams.forEach(param => {
+                    let scale = SCALE[param] || 1;
+                    pane.querySelectorAll('input[name='+param+']')
+                        .forEach(input=>{
+                            input.min = node[param].minValue * scale;
+                            input.max = node[param].maxValue * scale;
+                            input.addEventListener("change",event=>{
+                                selectedPatch.node[param].value = event.target.value / scale;
+                                pane.querySelectorAll('label[name='+param+']')
+                                    .forEach(label =>{
+                                        label.innerText = event.target.value;
+                                    });
+                                pane.querySelectorAll('input[name='+param+']')
+                                    .forEach(label =>{
+                                        input.value = event.target.value;
+                                    });
+                            });
+                        });
+                });
+            }
+        }
 
         function oscillator() {
             var i, inputs, node, pane;
@@ -980,39 +968,24 @@
                     selectedPatch.node.type = event.target.value;
                 });
             }
-            pane.querySelector('input[name=frequency]').min = node.frequency.minValue;
-            pane.querySelector('input[name=frequency]').max = node.frequency.maxValue;
-            pane.querySelector('input[name=frequency]').addEventListener('change', function(event) {
-                pane.querySelector('label[name=frequency]').innerText = event.target.value;
-                selectedPatch.node.frequency.value = event.target.value;
-            });
-            pane.querySelector('input[name=detune]').min = node.detune.minValue;
-            pane.querySelector('input[name=detune]').max = node.detune.maxValue;
-            pane.querySelector('input[name=detune]').addEventListener('change', function(event) {
-                pane.querySelector('label[name=detune]').innerText = event.target.value;
-                selectedPatch.node.detune.value = event.target.value;
-            });
+            setupParams(pane, node, "Oscillator");
         }
         function audioBuffer() {
             var node, pane;
             node = nodeSpec.AudioBufferSource.build();
             pane = document.querySelector('#' + nodeSpec.AudioBufferSource.label + 'Params');
-            pane.querySelector('input[name=playbackRate]').min = node.playbackRate.minValue * PLAYBACK_RATE_SCALE;
-            pane.querySelector('input[name=playbackRate]').max = 8 * PLAYBACK_RATE_SCALE;
-            pane.querySelector('input[name=playbackRate]').addEventListener('change', function(event) {
-                pane.querySelector('label[name=playbackRate]').innerText = event.target.value / PLAYBACK_RATE_SCALE;
-                selectedPatch.node.playbackRate.value = event.target.value / PLAYBACK_RATE_SCALE;
-            });
+            setupParams(pane, node, "AudioBufferSource");
+            pane.querySelectorAll('input[name=playbackRate]')
+                .forEach(input=>{
+                    input.min = 8 * PLAYBACK_RATE_SCALE;
+                    input.max = 8 * PLAYBACK_RATE_SCALE;
+                });
         }
         function gain() {
             var node, pane;
             node = nodeSpec.Gain.build();
             pane = document.querySelector('#' + nodeSpec.Gain.label + 'Params');
-            pane.querySelector('input[name=gain]').min = node.gain.minValue * GAIN_SCALE;
-            pane.querySelector('input[name=gain]').max = node.gain.maxValue * GAIN_SCALE;
-            pane.querySelector('input[name=gain]').addEventListener('change', function(event) {
-                selectedPatch.node.gain.value = event.target.value / GAIN_SCALE;
-            });
+            setupParams(pane, node, "Gain");
         }
         function biquadFilter() {
             var i, inputs, node, pane;
@@ -1024,28 +997,7 @@
                     selectedPatch.node.type = event.target.value;
                 });
             }
-            pane.querySelector('input[name=frequency]').min = node.frequency.minValue;
-            pane.querySelector('input[name=frequency]').max = node.frequency.maxValue;
-            pane.querySelector('input[name=frequency]').addEventListener('change', function(event) {
-                pane.querySelector('label[name=frequency]').innerText = event.target.value;
-                selectedPatch.node.frequency.value = event.target.value;
-            });
-            pane.querySelector('input[name=detune]').min = node.detune.minValue;
-            pane.querySelector('input[name=detune]').max = node.detune.maxValue;
-            pane.querySelector('input[name=detune]').addEventListener('change', function(event) {
-                pane.querySelector('label[name=detune]').innerText = event.target.value;
-                selectedPatch.node.detune.value = event.target.value;
-            });
-            pane.querySelector('input[name=Q]').min = node.Q.minValue * Q_SCALE;
-            pane.querySelector('input[name=Q]').max = node.Q.maxValue * Q_SCALE;
-            pane.querySelector('input[name=Q]').addEventListener('change', function(event) {
-                selectedPatch.node.Q.value = event.target.value / Q_SCALE;
-            });
-            pane.querySelector('input[name=gain]').min = node.gain.minValue;
-            pane.querySelector('input[name=gain]').max = node.gain.maxValue;
-            pane.querySelector('input[name=gain]').addEventListener('change', function(event) {
-                selectedPatch.node.gain.value = event.target.value;
-            });
+            setupParams(pane, node, "BiquadFilter");
         }
         function convolver() {
             var i, inputs, node;
@@ -1062,52 +1014,13 @@
             var node, pane;
             node = nodeSpec.Delay.build();
             pane = document.querySelector('#' + nodeSpec.Delay.label + 'Params');
-            pane.querySelector('input[name=delayTime]').min = node.delayTime.minValue * DELAY_TIME_SCALE;
-            pane.querySelector('input[name=delayTime]').max = node.delayTime.maxValue * DELAY_TIME_SCALE;
-            pane.querySelector('input[name=delayTime]').addEventListener('change', function(event) {
-                pane.querySelector('label[name=delayTime]').innerText = event.target.value / DELAY_TIME_SCALE;
-                selectedPatch.node.delayTime.value = event.target.value / DELAY_TIME_SCALE;
-            });
+            setupParams(pane, node, "Delay");
         }
         function compress() {
             var node, pane;
             node = nodeSpec.DynamicsCompressor.build();
             pane = document.querySelector('#' + nodeSpec.DynamicsCompressor.label + 'Params');
-            pane.querySelector('input[name=threshold]').min = node.threshold.minValue;
-            pane.querySelector('input[name=threshold]').max = node.threshold.maxValue;
-            pane.querySelector('input[name=threshold]').addEventListener('change', function(event) {
-                pane.querySelector('label[name=threshold]').innerText = event.target.value;
-                selectedPatch.node.threshold.value = event.target.value;
-            });
-            pane.querySelector('input[name=knee]').min = node.knee.minValue;
-            pane.querySelector('input[name=knee]').max = node.knee.maxValue;
-            pane.querySelector('input[name=knee]').addEventListener('change', function(event) {
-                pane.querySelector('label[name=knee]').innerText = event.target.value;
-                selectedPatch.node.knee.value = event.target.value;
-            });
-            pane.querySelector('input[name=ratio]').min = node.ratio.minValue;
-            pane.querySelector('input[name=ratio]').max = node.ratio.maxValue;
-            pane.querySelector('input[name=ratio]').addEventListener('change', function(event) {
-                pane.querySelector('label[name=ratio]').innerText = event.target.value;
-                selectedPatch.node.ratio.value = event.target.value;
-            });
-            pane.querySelector('input[name=reduction]').min = node.reduction.minValue;
-            pane.querySelector('input[name=reduction]').max = node.reduction.maxValue;
-            pane.querySelector('input[name=reduction]').addEventListener('change', function(event) {
-                selectedPatch.node.reduction.value = event.target.value;
-            });
-            pane.querySelector('input[name=attack]').min = node.attack.minValue * ATTACK_SCALE;
-            pane.querySelector('input[name=attack]').max = node.attack.maxValue * ATTACK_SCALE;
-            pane.querySelector('input[name=attack]').addEventListener('change', function(event) {
-                pane.querySelector('label[name=attack]').innerText = (event.target.value / ATTACK_SCALE).toPrecision(4);
-                selectedPatch.node.attack.value = event.target.value / ATTACK_SCALE;
-            });
-            pane.querySelector('input[name=release]').min = node.release.minValue * RELEASE_SCALE;
-            pane.querySelector('input[name=release]').max = node.release.maxValue * RELEASE_SCALE;
-            pane.querySelector('input[name=release]').addEventListener('change', function(event) {
-                pane.querySelector('label[name=release]').innerText = (event.target.value / RELEASE_SCALE).toPrecision(4);
-                selectedPatch.node.release.value = event.target.value / RELEASE_SCALE;
-            });
+            setupParams(pane, node, "DynamicsCompressor");
         }
         function shaper() {
             var node, i, inputs;
@@ -1136,42 +1049,29 @@
 
     function refreshPane(patch) {
         var pane = document.querySelector('#' + nodeSpec[patch.nodeType].label + 'Params');
+        if(nodeSpec[patch.nodeType].aparams){
+            nodeSpec[patch.nodeType].aparams.forEach(param => {
+                let scale = SCALE[param] || 1;
+                pane.querySelectorAll('input[name='+param+']')
+                    .forEach(input => {
+                        input.value = patch.node[param].value * scale;
+                    });
+                pane.querySelectorAll('label[name='+param+']')
+                    .forEach(label => {
+                        label.innerText = patch.node[param].value * scale;
+                    });
+            })
+        }
         if (patch.nodeType === 'Oscillator') {
             pane.querySelector('input[value=' + patch.node.type + ']').checked = 'checked';
-            pane.querySelector('input[name=frequency]').value = patch.node.frequency.value;
-            pane.querySelector('label[name=frequency]').innerText = patch.node.frequency.value;
-            pane.querySelector('input[name=detune]').value = patch.node.detune.value;
-            pane.querySelector('label[name=detune]').innerText = patch.node.detune.value;
         } else if (patch.nodeType === 'AudioBufferSource') {
-            pane.querySelector('label[name=playbackRate]').innerText = patch.node.playbackRate.value;
-            pane.querySelector('input[name=playbackRate]').value = patch.node.playbackRate.value * PLAYBACK_RATE_SCALE;
         } else if (patch.nodeType === 'Gain') {
-            pane.querySelector('input[name=gain]').value = patch.node.gain.value * GAIN_SCALE;
         } else if (patch.nodeType === 'BiquadFilter') {
             pane.querySelector('input[value=' + patch.node.type + ']').checked = 'checked';
-            pane.querySelector('input[name=frequency]').value = patch.node.frequency.value;
-            pane.querySelector('label[name=frequency]').innerText = patch.node.frequency.value;
-            pane.querySelector('input[name=detune]').value = patch.node.detune.value;
-            pane.querySelector('label[name=detune]').innerText = patch.node.detune.value;
-            pane.querySelector('input[name=Q]').value = patch.node.Q.value * Q_SCALE;
-            pane.querySelector('input[name=gain]').value = patch.node.gain.value;
         } else if (patch.nodeType === 'Convolver') {
             pane.querySelector('input[value=' + patch.node.normalize + ']').checked = 'checked';
         } else if (patch.nodeType === 'Delay') {
-            pane.querySelector('input[name=delayTime]').value = patch.node.delayTime.value * DELAY_TIME_SCALE;
-            pane.querySelector('label[name=delayTime]').innerText = patch.node.delayTime.value;
         } else if (patch.nodeType === 'DynamicsCompressor') {
-            pane.querySelector('input[name=threshold]').value = patch.node.threshold.value;
-            pane.querySelector('label[name=threshold]').innerText = patch.node.threshold.value;
-            pane.querySelector('input[name=knee]').value = patch.node.knee.value;
-            pane.querySelector('label[name=knee]').innerText = patch.node.knee.value;
-            pane.querySelector('input[name=ratio]').value = patch.node.ratio.value;
-            pane.querySelector('label[name=ratio]').innerText = patch.node.ratio.value;
-            pane.querySelector('input[name=reduction]').value = patch.node.reduction.value;
-            pane.querySelector('input[name=attack]').value = patch.node.attack.value * ATTACK_SCALE;
-            pane.querySelector('label[name=attack]').innerText = patch.node.attack.value.toPrecision(4);
-            pane.querySelector('input[name=release]').value = patch.node.release.value * RELEASE_SCALE;
-            pane.querySelector('label[name=release]').innerText = patch.node.release.value.toPrecision(4);
         } else if (patch.nodeType === 'WaveShaper') {
             pane.querySelector('input[value=\'' + patch.node.oversample + '\']').checked = 'checked';
         }
