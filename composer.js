@@ -146,7 +146,18 @@
             maxInstance : 1,
             aparams : [],
             build : function() { return audioContext.destination; }
-        }
+        },
+		ConstantSource : {
+			label : 'constant',
+			pos : 13,
+			maxInstance : Number.MAX_VALUE,
+			aparams : ['offset'],
+			build: function() {
+				let node = audioContext.createConstantSource()
+				node.start(0);
+				return node;
+			}
+		}
     };
     var channelLabels = ['L', 'R', 'C', 'LFE', 'SL', 'SR'];
 
@@ -1073,6 +1084,12 @@
         function audioDestination() {
             document.querySelector('#destParams label[name=maxChannelCount]').innerText = audioContext.destination.maxChannelCount;
         }
+		function constantSource() {
+			var node, pane;
+            node = nodeSpec.ConstantSource.build();
+            pane = document.querySelector('#' + nodeSpec.ConstantSource.label + 'Params');
+            setupParams(pane, node, "ConstantSource");
+		}
 
         oscillator();
         audioBuffer();
@@ -1083,6 +1100,7 @@
         compress();
         shaper();
         audioDestination();
+		constantSource();
     }
 
     function refreshPane(patch) {
