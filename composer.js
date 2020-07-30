@@ -137,6 +137,7 @@
             build : function() {
                 var node = audioContext.createAnalyser();
                 node.fftSize = FFT_SIZE;
+                node.smoothingTimeConstant = 0;
                 return node;
             }
         },
@@ -147,17 +148,17 @@
             aparams : [],
             build : function() { return audioContext.destination; }
         },
-		ConstantSource : {
-			label : 'constant',
-			pos : 13,
-			maxInstance : Number.MAX_VALUE,
-			aparams : ['offset'],
-			build: function() {
-				let node = audioContext.createConstantSource()
-				node.start(0);
-				return node;
-			}
-		}
+        ConstantSource : {
+            label : 'constant',
+            pos : 13,
+            maxInstance : Number.MAX_VALUE,
+            aparams : ['offset'],
+            build: function() {
+                let node = audioContext.createConstantSource()
+                node.start(0);
+                return node;
+            }
+        }
     };
     var channelLabels = ['L', 'R', 'C', 'LFE', 'SL', 'SR'];
 
@@ -414,6 +415,30 @@
         area.background.hitArea = new Shape();
         area.background.hitArea.graphics.beginFill('#000').drawRect(0, 0, width, height);
         area.addChild(area.background);
+
+        function play(){
+            audioContext.resume();
+            area.playIcon.visible = false;
+            area.pauseIcon.visible = true;
+        }
+        function pause(){
+            audioContext.suspend();
+            area.playIcon.visible = true;
+            area.pauseIcon.visible = false;
+        }
+        area.playIcon = new Bitmap('play.png');
+        area.playIcon.x = 5;
+        area.playIcon.y = 15;
+        area.playIcon.visible = false;
+        area.playIcon.addEventListener('click', play);
+        area.addChild(area.playIcon);
+        
+        area.pauseIcon = new Bitmap('pause.png');
+        area.pauseIcon.x = 5;
+        area.pauseIcon.y = 15;
+        area.pauseIcon.visible = true;
+        area.pauseIcon.addEventListener('click', pause);
+        area.addChild(area.pauseIcon);
 
         area.trashbox = new Bitmap('trashbox.png');
         area.trashbox.x = width - 25;
@@ -849,17 +874,17 @@
                 peer.peers.push(port);
 
                 if (port.portType === 'input') {
-					if(port.channel !== null){
-						peer.node.connect(port.node, peer.channel, port.channel);
-					}else{//this is an AudioParam, thus no channel
-						peer.node.connect(port.node, peer.channel);
-					}
+                    if(port.channel !== null){
+                        peer.node.connect(port.node, peer.channel, port.channel);
+                    }else{//this is an AudioParam, thus no channel
+                        peer.node.connect(port.node, peer.channel);
+                    }
                 } else {
-					if(peer.channel !== null){
-						port.node.connect(peer.node, port.channel, peer.channel);
-					}else{//that is an AudioParam, thus no channel
-						port.node.connect(peer.node, port.channel);
-					}
+                    if(peer.channel !== null){
+                        port.node.connect(peer.node, port.channel, peer.channel);
+                    }else{//that is an AudioParam, thus no channel
+                        port.node.connect(peer.node, port.channel);
+                    }
                 }
             }
         }
@@ -888,11 +913,11 @@
             port.node.disconnect(port.channel);
             for (i = 0; i < port.peers.length; i++) {
                 peer = port.peers[i];
-				if(peer.channel !== null){
-					port.node.connect(peer.node, port.channel, peer.channel);
-				}else{
-					port.node.connect(peer.node, port.channel);
-				}
+                if(peer.channel !== null){
+                    port.node.connect(peer.node, port.channel, peer.channel);
+                }else{
+                    port.node.connect(peer.node, port.channel);
+                }
             }
         }
 
@@ -1084,12 +1109,12 @@
         function audioDestination() {
             document.querySelector('#destParams label[name=maxChannelCount]').innerText = audioContext.destination.maxChannelCount;
         }
-		function constantSource() {
-			var node, pane;
+        function constantSource() {
+            var node, pane;
             node = nodeSpec.ConstantSource.build();
             pane = document.querySelector('#' + nodeSpec.ConstantSource.label + 'Params');
             setupParams(pane, node, "ConstantSource");
-		}
+        }
 
         oscillator();
         audioBuffer();
@@ -1100,7 +1125,7 @@
         compress();
         shaper();
         audioDestination();
-		constantSource();
+        constantSource();
     }
 
     function refreshPane(patch) {
