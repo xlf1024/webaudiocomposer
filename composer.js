@@ -33,12 +33,14 @@
             label : 'media',
             pos : 0,
             maxInstance : 1,
+            aparams : [],
             build : function() { return mediaNode; }
         },*/
         MediaStreamAudioSource : {
             label : 'microphone',
             pos : 0,
             maxInstance : Number.MAX_VALUE,
+            aparams : [],
             build : function() { return audioContext.createMediaStreamSource(micStream); }
         },
         Oscillator : {
@@ -74,12 +76,14 @@
             label : 'split',
             pos : 4,
             maxInstance : Number.MAX_VALUE,
+            aparams : [],
             build : function() { return audioContext.createChannelSplitter(); }
         },
         ChannelMerger : {
             label : 'merge',
             pos : 5,
             maxInstance : Number.MAX_VALUE,
+            aparams : [],
             build : function() { return audioContext.createChannelMerger(); }
         },
         BiquadFilter : {
@@ -93,6 +97,7 @@
             label : 'convolve',
             pos : 7,
             maxInstance : Number.MAX_VALUE,
+            aparams : [],
             build : function() {
                 var node = audioContext.createConvolver();
                 node.buffer = impulseResponse(4, 4, false);
@@ -117,6 +122,7 @@
             label : 'shaper',
             pos : 10,
             maxInstance : Number.MAX_VALUE,
+            aparams : [],
             build : function() {
                 var node = audioContext.createWaveShaper();
                 node.curve = makeDistortionCurve(400);
@@ -127,6 +133,7 @@
             label : 'analyser',
             pos : 11,
             maxInstance : Number.MAX_VALUE,
+            aparams : [],
             build : function() {
                 var node = audioContext.createAnalyser();
                 node.fftSize = FFT_SIZE;
@@ -137,6 +144,7 @@
             label : 'dest',
             pos : 12,
             maxInstance : 1,
+            aparams : [],
             build : function() { return audioContext.destination; }
         }
     };
@@ -691,10 +699,11 @@
 
         patch.outputPorts = new Container();
         patch.addChild(patch.outputPorts);
-
+        
+        let inputCount = patch.node.numberOfInputs + (nodeSpec[patch.nodeType].aparams.length || 0);
         for (i = 0; i < patch.node.numberOfInputs; i++) {
             x = 8 - patch.getBounds().width / 2;
-            y = (i + 1) * patch.getBounds().height / (patch.node.numberOfInputs + 1) - patch.getBounds().height / 2;
+            y = (i + 1) * patch.getBounds().height / (inputCount + 1) - patch.getBounds().height / 2;
 
             port = Port(patch.node, 'input', i);
             port.x = x;
@@ -708,7 +717,20 @@
                 patch.addChild(label);
             }
         }
+        for(let param of nodeSpec[patch.nodeType].aparams){
+            x = 8 - patch.getBounds().width / 2;
+            y = (i + 1) * patch.getBounds().height / (inputCount + 1) - patch.getBounds().height / 2;
 
+            port = Port(patch.node[param], 'input', null);
+            port.x = x;
+            port.y = y;
+            patch.inputPorts.addChild(port);
+            label = new Text(param, 'normal 8px monotype', '#000');
+            label.x = x + 8;
+            label.y = y - 4;
+            patch.addChild(label);
+            i++;
+        }
         for (i = 0; i < patch.node.numberOfOutputs; i++) {
             x = patch.getBounds().width / 2 - 8;
             y = (i + 1) * patch.getBounds().height / (patch.node.numberOfOutputs + 1) - patch.getBounds().height / 2;
@@ -816,9 +838,17 @@
                 peer.peers.push(port);
 
                 if (port.portType === 'input') {
-                    peer.node.connect(port.node, peer.channel, port.channel);
+					if(port.channel !== null){
+						peer.node.connect(port.node, peer.channel, port.channel);
+					}else{//this is an AudioParam, thus no channel
+						peer.node.connect(port.node, peer.channel);
+					}
                 } else {
-                    port.node.connect(peer.node, port.channel, peer.channel);
+					if(peer.channel !== null){
+						port.node.connect(peer.node, port.channel, peer.channel);
+					}else{//that is an AudioParam, thus no channel
+						port.node.connect(peer.node, port.channel);
+					}
                 }
             }
         }
@@ -847,7 +877,11 @@
             port.node.disconnect(port.channel);
             for (i = 0; i < port.peers.length; i++) {
                 peer = port.peers[i];
-                patch.node.connect(peer.node, port.channel, peer.channel);
+				if(peer.channel !== null){
+					port.node.connect(peer.node, port.channel, peer.channel);
+				}else{
+					port.node.connect(peer.node, port.channel);
+				}
             }
         }
 
@@ -855,7 +889,11 @@
         port.portType = type;
         port.node = node;
         port.channel = channel;
-        port.graphics.beginFill('#888').drawCircle(0, 0, PORT_RADIUS);
+        if(channel !== null){
+            port.graphics.beginFill('#888').drawCircle(0, 0, PORT_RADIUS);
+        }else{//Parameter port has no channel
+            port.graphics.beginFill('#fff').beginStroke('#888').drawCircle(0, 0, PORT_RADIUS);
+        }
         port.setBounds(-PORT_RADIUS, -PORT_RADIUS, 2 * PORT_RADIUS, 2 * PORT_RADIUS);
         port.addEventListener('mousedown', onMouseDown);
         port.addEventListener('dblclick', onDoubleClick);
